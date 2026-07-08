@@ -1,6 +1,6 @@
 {
   "name": "dcip",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "D-CIP \u2014 Digital Cyber Intelligence Platform (monorepo root)",
   "license": "UNLICENSED",

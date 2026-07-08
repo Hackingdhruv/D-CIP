@@ -1,4 +1,11 @@
-# Architecture
+# Architecture (foundation milestone)
+
+> ⚠️ **Historical document, not the current reference.** This was written at
+> the project's foundation milestone and describes locked-in decisions and
+> forward-looking intentions from that point — some (e.g. the AI provenance
+> review workflow described below) were not built as originally planned. For
+> the current, verified-against-the-code architecture, see
+> [`ARCHITECTURE.md`](../ARCHITECTURE.md) at the repo root.
 
 D-CIP is a monorepo composed of three runnable applications (web, api, worker),
 shared packages, and four backing datastores. This document describes the

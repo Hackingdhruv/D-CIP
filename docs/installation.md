@@ -13,7 +13,7 @@
 ## 1. Clone and configure
 
 ```bash
-git clone <repository-url> dcip && cd dcip
+git clone https://github.com/Hackingdhruv/D-CIP.git && cd D-CIP
 cp .env.example .env
 ```
 

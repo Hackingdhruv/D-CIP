@@ -141,20 +141,20 @@ The frontend talks to the API exclusively over `/api/v1`, authenticated with htt
 
 ## Screenshots
 
+| Executive Dashboard | Case Workspace |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.jpg) | ![Case Workspace](docs/screenshots/case-workspace.png) |
+
+| AI Case Summary |
+|---|
+| ![AI Case Summary](docs/screenshots/ai-summary.png) |
+
 <details>
-<summary><strong>Expand to view (placeholders — pending final captures)</strong></summary>
+<summary><strong>Remaining captures (Evidence & Timeline, Entity Graph, Reports) — pending</strong></summary>
 
-| Dashboard | Case Workspace |
-|---|---|
-| `docs/screenshots/dashboard.png` | `docs/screenshots/case-workspace.png` |
-
-| Evidence & Timeline | AI Assistant |
-|---|---|
-| `docs/screenshots/timeline.png` | `docs/screenshots/ai-chat.png` |
-
-| Entity Graph | Reports |
-|---|---|
-| `docs/screenshots/graph.png` | `docs/screenshots/reports.png` |
+| Evidence & Timeline | Entity Graph | Reports |
+|---|---|---|
+| `docs/screenshots/timeline.png` | `docs/screenshots/graph.png` | `docs/screenshots/reports.png` |
 
 </details>
 
@@ -171,8 +171,8 @@ The frontend talks to the API exclusively over `/api/v1`, authenticated with htt
 ### Clone
 
 ```bash
-git clone <repository-url> dcip
-cd dcip
+git clone https://github.com/Hackingdhruv/D-CIP.git
+cd D-CIP
 ```
 
 ### Environment Variables
@@ -296,9 +296,9 @@ dcip/
 
 ---
 
-## AI Pipeline
+## Evidence Processing Pipeline (incl. AI)
 
-Every uploaded file moves through an asynchronous, failure-isolated Celery pipeline. A failure in any single stage is logged and skipped — it never blocks the rest of the pipeline.
+Every uploaded file moves through an asynchronous, failure-isolated Celery pipeline — this runs for all evidence, whether or not AI is configured. A failure in any single stage is logged and skipped — it never blocks the rest of the pipeline.
 
 ```mermaid
 flowchart LR
@@ -394,7 +394,7 @@ npx tsc --noEmit    # type check
 
 Copyright © 2026 Dhruv Adlakha. All rights reserved.
 
-This software is proprietary. Unauthorized copying, distribution, or use is prohibited.
+This software is proprietary. Unauthorized copying, distribution, or use is prohibited. See [`LICENSE`](LICENSE) for the full terms.
 
 ---
 

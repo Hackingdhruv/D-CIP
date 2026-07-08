@@ -72,7 +72,7 @@ class Evidence(Base):
     # ── Extracted metadata (JSONB bag — extensible by AI milestone) ────────────
     extracted_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
-    # OCR / AI extracted text — placeholder for Milestone 5
+    # OCR / native text extraction output, populated by the processing pipeline
     ocr_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ── Classification ─────────────────────────────────────────────────────────

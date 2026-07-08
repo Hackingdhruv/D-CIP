@@ -430,7 +430,7 @@ externally.
 ## 11. Testing
 
 Backend: 33 files, ~428 tests (verified by running `pytest --collect-only`;
-README's "302 across 38" is stale). **Every test mocks the SQLAlchemy
+README.md's count is kept in sync with this figure). **Every test mocks the SQLAlchemy
 `Session` directly** (`unittest.mock.MagicMock`) and, for route-layer
 integration tests, overrides the `_get_current_user` FastAPI dependency with a
 fake user — there is no real database, no SQLite/testcontainers layer, in
@@ -452,14 +452,13 @@ graph, watchlists, reports, or admin UI.
 - **Neo4j is provisioned and health-checked but never written to or queried**
   for actual graph data (§7). The "knowledge graph" feature is a Postgres
   co-occurrence computation.
-- **Test counts are stale in README** (302/38 claimed vs. 428/33 actual).
 - **`apps/worker/tasks/evidence.py` is dead/orphaned code**; the real worker
   task lives in `apps/api/app/worker/tasks/evidence.py` (§10).
 - **`EvidenceStatus.HASHING` is never assigned** despite being a defined enum
   value; hashing happens during upload streaming without that status label.
-- **The "7-stage pipeline" README bullet undercounts reality** — actual
-  stages include `INDEXED` (OpenSearch) which isn't mentioned, and
-  `GRAPH_QUEUE` which does nothing (§5.2).
+- **`GRAPH_QUEUE` is a status flag with no code behind it** (§5.2) — the
+  README's pipeline diagram deliberately omits it and `HASHING` for this
+  reason, showing only the stages that actually do something.
 - **AI chat is not retrieval-augmented in the vector sense** — it's
   recency-ordered context stuffing; `generate_embeddings()` is dead code
   with no caller.

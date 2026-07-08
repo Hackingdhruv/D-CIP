@@ -1,5 +1,12 @@
 # Folder structure
 
+> ⚠️ **Historical document.** This reflects the project's early foundation
+> milestone, before the database migrations, most API routes, and most models
+> existed. It's kept for history, not as a reference. For the current,
+> accurate structure, see the [Project Structure section in
+> README.md](../README.md#project-structure) or [`ARCHITECTURE.md`
+> §1](../ARCHITECTURE.md#1-monorepo-layout).
+
 ```
 dcip/
 ├── apps/

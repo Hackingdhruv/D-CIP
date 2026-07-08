@@ -1,6 +1,6 @@
 {
   "name": "@dcip/ui",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "D-CIP design system: theme tokens, Tailwind preset, and UI helpers.",
   "type": "module",
