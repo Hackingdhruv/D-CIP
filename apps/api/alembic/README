@@ -1,0 +1,13 @@
+Alembic migrations for D-CIP.
+
+The connection URL and target metadata come from the application settings
+(see env.py). Generate a migration after adding or changing models:
+
+    uv run alembic revision --autogenerate -m "describe change"
+
+Apply migrations:
+
+    uv run alembic upgrade head
+
+No domain models exist in the foundation milestone, so the versions/ directory
+starts empty.

@@ -1,0 +1,27 @@
+{
+  "name": "@dcip/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Framework-agnostic shared logic (RBAC matrix, constants, utils) for D-CIP.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf .turbo coverage"
+  },
+  "dependencies": {
+    "@dcip/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@dcip/config": "workspace:*",
+    "eslint": "9.12.0",
+    "typescript": "5.6.3",
+    "vitest": "2.1.2"
+  }
+}

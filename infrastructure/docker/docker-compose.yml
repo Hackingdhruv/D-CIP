@@ -1,0 +1,181 @@
+# =============================================================================
+# D-CIP — Docker Compose
+#
+# Profiles:
+#   dev   → datastores + api + worker + web (direct ports, no edge proxy)
+#   prod  → the above plus the NGINX edge proxy fronting web + api on :80
+#
+# Run from the repo root, e.g.:
+#   docker compose -f infrastructure/docker/docker-compose.yml --profile dev up --build
+#
+# Service hostnames (postgres, redis, neo4j, opensearch) override the localhost
+# defaults from .env so the containers reach each other on the compose network.
+# =============================================================================
+
+name: dcip
+
+x-backend-env: &backend-env
+  DCIP_ENV: ${DCIP_ENV:-development}
+  SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-a-64-byte-random-value}
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_USER: ${POSTGRES_USER:-dcip}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dcip_dev_password}
+  POSTGRES_DB: ${POSTGRES_DB:-dcip}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  NEO4J_URI: bolt://neo4j:7687
+  NEO4J_USER: ${NEO4J_USER:-neo4j}
+  NEO4J_PASSWORD: ${NEO4J_PASSWORD:-dcip_neo4j_password}
+  OPENSEARCH_HOST: opensearch
+  OPENSEARCH_PORT: 9200
+  OPENSEARCH_USER: ${OPENSEARCH_USER:-admin}
+  OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD:-dcip_opensearch_password}
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  RATE_LIMIT_STORAGE_URI: redis://redis:6379/3
+
+services:
+  # --- Datastores ------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["dev", "prod"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dcip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dcip_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-dcip}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../../database/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dcip} -d ${POSTGRES_DB:-dcip}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [dcip-net]
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["dev", "prod"]
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [dcip-net]
+
+  neo4j:
+    image: neo4j:5-community
+    profiles: ["dev", "prod"]
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-dcip_neo4j_password}
+      NEO4J_server_memory_pagecache_size: 256m
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j-data:/data
+      - ../../database/neo4j/conf:/conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    networks: [dcip-net]
+
+  opensearch:
+    image: opensearchproject/opensearch:2.17.1
+    profiles: ["dev", "prod"]
+    environment:
+      discovery.type: single-node
+      bootstrap.memory_lock: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+    networks: [dcip-net]
+
+  # --- Application services ---------------------------------------------------
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    profiles: ["dev", "prod"]
+    environment: *backend-env
+    ports:
+      - "8000:8000"
+    volumes:
+      - evidence-uploads:/app/uploads
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      neo4j: { condition: service_healthy }
+      opensearch: { condition: service_healthy }
+    networks: [dcip-net]
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    profiles: ["dev", "prod"]
+    environment: *backend-env
+    volumes:
+      - evidence-uploads:/app/uploads
+    depends_on:
+      redis: { condition: service_healthy }
+    networks: [dcip-net]
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    profiles: ["dev", "prod"]
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    networks: [dcip-net]
+
+  # --- Edge reverse proxy (prod profile only) --------------------------------
+  proxy:
+    image: nginx:1.27-alpine
+    profiles: ["prod"]
+    ports:
+      - "80:80"
+    volumes:
+      - ../../infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../../infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - web
+      - api
+    networks: [dcip-net]
+
+volumes:
+  postgres-data:
+  redis-data:
+  neo4j-data:
+  opensearch-data:
+  evidence-uploads:
+
+networks:
+  dcip-net:
+    driver: bridge

@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Turbo
+.turbo/
+
+# Coverage / test artifacts
+coverage/
+playwright-report/
+test-results/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+
+# Evidence uploads (real/demo case data — never commit)
+uploads/
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.recommended.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker local volumes
+.docker-data/

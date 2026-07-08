@@ -1,0 +1,29 @@
+{
+  "name": "@dcip/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared tooling config (tsconfig, eslint) for the D-CIP monorepo.",
+  "type": "module",
+  "files": [
+    "tsconfig",
+    "eslint"
+  ],
+  "exports": {
+    "./eslint/base": "./eslint/base.js",
+    "./eslint/react": "./eslint/react.js",
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/react.json": "./tsconfig/react.json"
+  },
+  "peerDependencies": {
+    "eslint": "^9.12.0",
+    "typescript": "^5.6.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.12.0",
+    "eslint": "9.12.0",
+    "eslint-plugin-react-hooks": "5.0.0",
+    "eslint-plugin-react-refresh": "0.4.12",
+    "globals": "15.11.0",
+    "typescript-eslint": "8.8.1"
+  }
+}

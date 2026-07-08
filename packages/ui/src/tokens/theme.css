@@ -1,0 +1,106 @@
+/* =============================================================================
+ * D-CIP design tokens.
+ *
+ * Direction: a calm, dark slate-navy surface with a single disciplined blue
+ * accent. Glass panels and layered "premium" shadows give depth without noise.
+ * The forensic primitives of the product — evidence hashes, case IDs,
+ * timestamps — are rendered in JetBrains Mono via `font-mono`; that monospace
+ * treatment is the platform's visual signature.
+ *
+ * Values are HSL channel triplets (`H S% L%`) so they compose with Tailwind's
+ * `hsl(var(--token) / <alpha-value>)` and with shadcn/ui components.
+ * The dark theme is the default; a light theme is provided for completeness.
+ * ========================================================================== */
+
+@layer base {
+  :root {
+    --background: 222 24% 7%;
+    --foreground: 213 24% 90%;
+
+    --card: 222 22% 9%;
+    --card-foreground: 213 24% 90%;
+
+    --popover: 222 26% 8%;
+    --popover-foreground: 213 24% 90%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 16% 15%;
+    --secondary-foreground: 213 20% 88%;
+
+    --muted: 222 16% 13%;
+    --muted-foreground: 215 16% 60%;
+
+    --accent: 222 18% 17%;
+    --accent-foreground: 213 24% 92%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 158 58% 42%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 11%;
+
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 222 16% 18%;
+    --input: 222 16% 18%;
+    --ring: 217 91% 60%;
+
+    /* Surfaces used by glass panels and the workspace shell. */
+    --surface-1: 222 24% 7%;
+    --surface-2: 222 22% 9%;
+    --surface-3: 222 20% 12%;
+    --glass: 222 26% 10%;
+
+    --radius: 0.625rem;
+  }
+
+  .light {
+    --background: 210 33% 99%;
+    --foreground: 222 30% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 30% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 30% 12%;
+
+    --primary: 217 91% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 20% 95%;
+    --secondary-foreground: 222 30% 18%;
+
+    --muted: 214 20% 95%;
+    --muted-foreground: 215 16% 42%;
+
+    --accent: 214 24% 94%;
+    --accent-foreground: 222 30% 18%;
+
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 158 58% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 217 91% 55%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 214 18% 88%;
+    --input: 214 18% 88%;
+    --ring: 217 91% 55%;
+
+    --surface-1: 210 33% 99%;
+    --surface-2: 0 0% 100%;
+    --surface-3: 214 24% 96%;
+    --glass: 0 0% 100%;
+  }
+}

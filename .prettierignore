@@ -1,0 +1,8 @@
+**/dist
+**/build
+**/coverage
+**/node_modules
+**/.turbo
+**/*.lock
+**/.venv
+pnpm-lock.yaml
