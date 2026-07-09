@@ -20,12 +20,20 @@ dev: ## Run web + api + worker locally via turbo
 	pnpm dev
 
 .PHONY: up
-up: ## Start the full stack (dev profile) in Docker
-	$(COMPOSE) --profile dev up --build
+up: ## Start core services in Docker (postgres, redis, api, worker, web — no neo4j/opensearch)
+	$(COMPOSE) --profile core up --build
+
+.PHONY: up-full
+up-full: ## Start the full stack in Docker, including Neo4j and OpenSearch
+	$(COMPOSE) --profile full up --build
 
 .PHONY: up-prod
 up-prod: ## Start the full stack (prod profile) in Docker
 	$(COMPOSE) --profile prod up --build -d
+
+.PHONY: seed
+seed: ## Seed one fictional demo case (safe to re-run; refuses to run in production)
+	$(COMPOSE) exec api python scripts/seed_demo_data.py
 
 .PHONY: down
 down: ## Stop the stack and remove containers

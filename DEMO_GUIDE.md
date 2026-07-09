@@ -3,8 +3,8 @@
 **For GPCSSI evaluators/mentors.** This guide gets D-CIP running and walks
 through a demo without requiring you to read the source code. Every command
 and claim below was verified directly against the current repository —
-`git clone`, real Docker startup, a freshly-migrated database, and a real
-login test.
+real Docker builds, a freshly-migrated database, a real login test, and a
+real image upload processed end-to-end through OCR.
 
 ---
 
@@ -13,22 +13,22 @@ login test.
 D-CIP (Digital Cyber Intelligence Platform) is an investigation-management
 platform for cybercrime and digital forensics teams: case management,
 integrity-verified evidence upload (SHA-256 + chain of custody), automated
-entity/timeline extraction, an optional evidence-cited AI assistant, and
-server-enforced role-based access control.
+entity/timeline extraction with OCR, an optional evidence-cited AI
+assistant, and server-enforced role-based access control.
 
 ## 2. Minimum System Requirements
 
-| | Recommended | Workable minimum |
+| | Core mode (recommended default) | Full mode (+ Neo4j, OpenSearch, and/or AI) |
 |---|---|---|
-| RAM | **16 GB** | 8 GB — see the RAM warning in §15, this is genuinely tight |
-| Disk | 10 GB free | for Docker images, volumes, and (optionally) an Ollama model |
-| OS | Windows 10/11, macOS, or Linux | Docker Desktop or Docker Engine required |
+| RAM | 4 GB workable, 8 GB comfortable | **16 GB recommended** — see §15 |
+| Disk | 6 GB free | 10 GB free (Docker images/volumes + optional Ollama model) |
+| OS | Windows 10/11, macOS, or Linux — Docker Desktop or Docker Engine required | same |
 
 ## 3. Required Software
 
 | Software | Needed for |
 |---|---|
-| [Docker](https://docker.com) + Docker Compose v2 | Running the full stack (recommended path) |
+| [Docker](https://docker.com) + Docker Compose v2 | Running the stack (recommended path) |
 | Git | Cloning the repository |
 | Node.js 20.11+, pnpm 9+ | Only if running the frontend **outside** Docker |
 | Python 3.13, [uv](https://docs.astral.sh/uv/) | Only if running the backend **outside** Docker |
@@ -51,31 +51,41 @@ The defaults in `.env.example` are already usable for a local evaluation —
 no edits are required to get the platform running. `AI_PROVIDER=none` by
 default (AI is off until you opt in — see §13).
 
-## 7. Docker/Service Startup
+## 7. Docker/Service Startup — Core vs. Full Mode
 
-Run from the repository root:
+Run from the repository root. Two modes are available:
+
+**Core mode (recommended default)** — PostgreSQL, Redis, the API, the
+Celery worker, and the web frontend. Neo4j and OpenSearch are **not**
+started, matching the app code's own design (it already treats both as
+optional and degrades gracefully without them):
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml --profile dev up --build
+docker compose -f infrastructure/docker/docker-compose.yml --profile core up --build
 ```
 
-**This single command starts everything**: PostgreSQL, Redis, Neo4j,
-OpenSearch, the API, the Celery worker, and the web frontend. First run
-builds the API and web images from source, which can take several minutes.
+**Full mode** — everything in core mode, plus Neo4j and OpenSearch, for
+exercising the graph/search paths:
 
-> ⚠️ **Verified limitation**: the app's own code treats Neo4j and OpenSearch
-> as optional (it degrades gracefully if they're down), but the Docker
-> Compose file does **not** — the `api` service is hard-configured to wait
-> for all four datastores to report healthy before it will start, in both
-> the `dev` and `prod` profiles. There is currently no lighter profile that
-> skips them. See §15 for why this matters on lower-RAM machines.
+```bash
+docker compose -f infrastructure/docker/docker-compose.yml --profile full up --build
+```
+
+Both modes were verified from a clean build: core mode's API reports
+healthy without ever waiting on Neo4j/OpenSearch; full mode's readiness
+endpoint reports all four datastores `"ok"` once Neo4j and OpenSearch
+finish their own startup (roughly a minute).
+
+First run builds the API, worker, and web images from source, which can
+take a few minutes.
 
 ## 8. Database Migrations
 
-**No manual step is required when using Docker.** The API container's
-entrypoint automatically runs `alembic upgrade head` (applying all 9
-migrations, seeding RBAC roles/permissions and the default admin account)
-every time it starts, before the server begins accepting requests.
+**No manual step is required.** The API container's entrypoint
+automatically runs `alembic upgrade head` (applying all 9 migrations,
+seeding RBAC roles/permissions and the default admin account) every time it
+starts, before the server begins accepting requests. Verified by migrating
+a completely empty database from scratch.
 
 If you're running the backend outside Docker, apply migrations manually:
 ```bash
@@ -87,16 +97,18 @@ uv run alembic upgrade head
 
 Check container health directly:
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml --profile dev ps
+docker compose -f infrastructure/docker/docker-compose.yml --profile core ps
 ```
-All services should show `healthy` (datastores) or `running` (api/worker/web).
+(swap `core` for `full` if you started full mode)
 
 Check the application's own readiness endpoint (reports each datastore individually):
 ```bash
 curl http://localhost:8000/api/v1/health/ready
 ```
-A healthy response returns HTTP 200 with `"status": "ok"` and every
-component (`postgres`, `redis`, `neo4j`, `opensearch`) marked `"ok"`.
+In core mode, a healthy response returns `"status": "degraded"` with
+`postgres`/`redis` marked `"ok"` and `neo4j`/`opensearch` marked `"error"`
+(expected — they're not running) — the API and every core feature work
+normally regardless. In full mode, `"status": "ok"` with all four `"ok"`.
 
 ## 10–11. URLs
 
@@ -116,8 +128,7 @@ scratch with no other data present):
 | **Email** | `admin@dcip.local` |
 | **Password** | `Admin@dcip.2024!` |
 
-This is the *only* account created automatically — there is no seeded
-non-admin account and no seed script in the repository. To demonstrate a
+This is the *only* account created automatically. To demonstrate a
 non-admin role, log in as admin, go to **Administration → Identity → New
 User**, and create one (takes under a minute; assign any non-administrator
 role to see the permission difference).
@@ -153,42 +164,61 @@ will work — `llama3.2` is a reasonable default for a laptop.
 ## 15. RAM/Resource Warning — Ollama, Neo4j, OpenSearch
 
 **This is based on direct, first-hand experience during this project's own
-development, not a generic disclaimer:** running the full Docker stack
-(with Neo4j and OpenSearch, which — see §7 — start unconditionally) *and*
-Ollama simultaneously has been observed to exhaust available memory on an
-8 GB machine badly enough to crash Docker Desktop's own virtual machine,
-taking every container down with it.
+development, not a generic disclaimer.** Core mode (§7) is deliberately
+light and does not exhibit this problem. The warning below applies
+specifically if you add full mode and/or Ollama on top of it:
 
 - Neo4j and OpenSearch are both JVM-based and each reserve roughly
-  512 MB–1 GB+ even at idle, on top of everything else.
+  512 MB–1 GB+ even at idle.
 - A small local Ollama model needs another 1–2 GB free to load without
   failing.
-- **If your machine has 8 GB RAM or less**, expect this to be tight. Close
-  other memory-heavy applications before starting, and consider running
-  without Ollama (§16) or temporarily stopping Neo4j/OpenSearch with
-  `docker compose ... stop neo4j opensearch` if you hit failures —
-  the platform's core features (cases, evidence, RBAC, reporting) do not
-  depend on either.
-- 16 GB+ RAM is comfortable for the full stack, including AI.
+- Running full mode *and* Ollama simultaneously has been observed to
+  exhaust available memory on an 8 GB machine badly enough to crash Docker
+  Desktop's own virtual machine, taking every container down with it.
+- **If your machine has 8 GB RAM or less**, prefer core mode (§7) and skip
+  Ollama, or run them one at a time. Core mode alone is comfortable even on
+  constrained hardware.
+- 16 GB+ RAM is comfortable for full mode with AI enabled simultaneously.
 
 ## 16. Running Without AI
 
 This is the **default** — `AI_PROVIDER=none` in `.env.example` requires no
-action. Every other feature (cases, evidence pipeline, entity/timeline
+action. Every other feature (cases, evidence pipeline, OCR, entity/timeline
 extraction, RBAC, reporting, watchlists) works fully without it. The AI tab
 will show a clear "AI is not configured" message instead of failing.
 
+## 16b. Demo Data Seeding (Optional)
+
+The database starts empty. To populate it with one realistic, entirely
+fictional demo case — investment-fraud scenario, complete with tasks,
+notes, timeline events, and two evidence files (one plain-text log, one
+image processed through real OCR) — run, after the stack is up:
+
+```bash
+docker compose -f infrastructure/docker/docker-compose.yml exec api python scripts/seed_demo_data.py
+```
+
+- **Manual only** — this never runs automatically, not even inside Docker.
+- **Safe to re-run** — it checks for the demo case first and does nothing
+  if it already exists (no duplicates).
+- **Refuses to run in production** — exits with an error if
+  `DCIP_ENV=production`, verified directly.
+- All data is fictional: example-TLD emails, RFC 5737 documentation IP
+  ranges, no real names or credentials.
+
+If running the backend outside Docker: `cd apps/api && uv run python scripts/seed_demo_data.py`.
+
 ## 17. Suggested 5-Minute Evaluator Demo Flow
 
-> No demo case ships with the repository — the database starts empty. The
-> flow below has you create one live, which also demonstrates the evidence
-> pipeline working in real time.
+> Run the seed command in §16b first for the fullest demo. Without it, the
+> flow below still works — just create a case and upload a file yourself at
+> step 3–4 instead of opening the seeded one.
 
 1. **Login** — http://localhost:5173, sign in with the admin credentials from §12.
 2. **Executive Dashboard** — land here after login; note the role-based dashboard and system metrics.
-3. **Cases** — open the Cases list, click **New Case**, give it a title (e.g. "Evaluator Demo") and priority.
-4. **Evidence** — inside the new case, open the Evidence tab and upload a small file (a `.txt` or `.log` works well). Watch the processing status move through the pipeline stages (hash → metadata → extraction → timeline → indexed).
-5. **AI Assistant** *(only if you completed §13)* — open the AI tab, click **Generate** for a case summary, or ask a question in Chat about the evidence you just uploaded. Every claim should cite the evidence file by name.
+3. **Cases** — open the Cases list. If you ran §16b, open **"[DEMO] Operation Golden Ledger — Cross-Border Investment Fraud"**; otherwise click **New Case** and create one.
+4. **Evidence** — open the Evidence tab. If seeded, you'll see two already-processed files — open `victim_chat_screenshot.png` and note its `ocr_text` was extracted from the image, not typed in. Otherwise, upload a small file yourself and watch it move through the pipeline (hash → metadata → extraction → timeline → indexed).
+5. **AI Assistant** *(only if you completed §13)* — open the AI tab, click **Generate** for a case summary, or ask a question in Chat about the case evidence. Every claim should cite the evidence file by name.
 6. **Reports** — generate a report from the case (PDF/DOCX/HTML export).
 7. **Administration** — as admin, briefly show Identity (user list), Roles/Permissions, and Audit Log to demonstrate server-enforced RBAC and the audit trail.
 
@@ -196,27 +226,29 @@ will show a clear "AI is not configured" message instead of failing.
 
 | Symptom | Likely cause / fix |
 |---|---|
-| `port is already allocated` | Something else is using 5173/8000/5432/6379/7474/7687/9200. Stop it, or change the host port mapping in `docker-compose.yml`. |
+| `port is already allocated` | Something else is using 5173/8000/5432/6379/(7474/7687/9200 in full mode). Stop it, or change the host port mapping in `docker-compose.yml`. |
 | Frontend loads but API calls fail right after `up` | The API is still applying migrations. Wait 15–30s and refresh — `web`'s container starts as soon as `api`'s container process launches, not after it's actually ready. |
-| Neo4j or OpenSearch container keeps restarting / never turns healthy | Almost always memory pressure — see §15. Increase Docker Desktop's memory allocation (Settings → Resources) or free up host RAM. |
+| `web` container shows `unhealthy` in `docker compose ps` | Known cosmetic issue in the container's internal healthcheck (`wget` can't reach `localhost` from inside that container) — the site itself works fine externally (verified: HTTP 200 on port 5173). Not a functional problem. |
+| Neo4j or OpenSearch container keeps restarting / never turns healthy (full mode) | Almost always memory pressure — see §15. Increase Docker Desktop's memory allocation (Settings → Resources), free up host RAM, or just use core mode instead. |
 | "AI is not configured" message | Expected behavior when `AI_PROVIDER=none` (the default) — not a bug. See §13 to enable it. |
 | AI Assistant errors even with Ollama configured | Confirm `ollama serve` is running and `ollama pull llama3.2` completed; test directly with `curl http://localhost:11434/v1/models`. Also check RAM (§15) — a failed model load under memory pressure is the most common cause. |
-| OCR text extraction doesn't happen for image evidence when using Docker | The current API Docker image does not include the Tesseract binary, so OCR silently no-ops in the containerized path. Text-based evidence (`.txt`, `.log`, etc.) is unaffected. Running the backend outside Docker with Tesseract installed on the host enables it. |
-| `SECRET_KEY` / production startup error | Only applies if you set `DCIP_ENV=production` — the app refuses to boot with the placeholder secret key in production mode. Not relevant for local evaluation (`DCIP_ENV=development` is the default). |
+| `SECRET_KEY` / production startup error | Only applies if you set `DCIP_ENV=production` — the app refuses to boot with the placeholder secret key in production mode, and the demo seed script also separately refuses to run. Not relevant for local evaluation (`DCIP_ENV=development` is the default). |
 
 ## 19. Stopping and Restarting
 
 **Stop** (keeps your data):
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml --profile dev down
+docker compose -f infrastructure/docker/docker-compose.yml --profile core down
 ```
 
 **Stop and wipe all data** (fresh slate next time):
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml --profile dev down -v
+docker compose -f infrastructure/docker/docker-compose.yml --profile core down -v
 ```
 
 **Restart** (after a plain `down`, no rebuild needed):
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml --profile dev up
+docker compose -f infrastructure/docker/docker-compose.yml --profile core up
 ```
+
+(Use `--profile full` throughout instead if you're running full mode.)

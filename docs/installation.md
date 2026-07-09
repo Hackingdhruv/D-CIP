@@ -29,18 +29,24 @@ The API refuses to start in production with the placeholder secret.
 ## 2a. Run with Docker (recommended)
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml --profile dev up --build
+# Core mode (recommended) — no Neo4j/OpenSearch, the app degrades gracefully without them.
+docker compose -f infrastructure/docker/docker-compose.yml --profile core up --build
+
+# Full mode — adds Neo4j and OpenSearch.
+docker compose -f infrastructure/docker/docker-compose.yml --profile full up --build
 ```
 
-This starts PostgreSQL, Redis, Neo4j, OpenSearch, the API, the worker, and the
-web app. Add the edge reverse proxy with the `prod` profile:
+Core mode starts PostgreSQL, Redis, the API, the worker, and the web app.
+Full mode adds Neo4j and OpenSearch. Add the edge reverse proxy with the
+`prod` profile:
 
 ```bash
 docker compose -f infrastructure/docker/docker-compose.yml --profile prod up --build -d
 ```
 
-The repository ships a `Makefile` wrapping these commands: `make up`, `make
-up-prod`, `make down`, `make logs`.
+The repository ships a `Makefile` wrapping these commands: `make up` (core
+mode), `make up-full`, `make up-prod`, `make down`, `make logs`, `make seed`
+(demo data).
 
 ## 2b. Run the apps directly
 
@@ -62,7 +68,7 @@ uv run uvicorn app.main:app --reload
 The API expects the datastores to be reachable. Start just those with Docker:
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml --profile dev up postgres redis neo4j opensearch
+docker compose -f infrastructure/docker/docker-compose.yml --profile core up postgres redis
 ```
 
 ## 3. Verify

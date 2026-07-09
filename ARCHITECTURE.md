@@ -306,6 +306,12 @@ introduce any event not already in the deterministic findings.
 
 ## 7. Knowledge graph — Neo4j is not currently load-bearing
 
+As of the `core`/`full` Compose profile split (see `infrastructure/docker/
+docker-compose.yml`), Neo4j is excluded from the default `core` profile
+entirely, and the `api`/`worker` services no longer hard-depend on it being
+healthy in any profile — the infrastructure now matches the "not
+load-bearing" reality described below, rather than contradicting it.
+
 Neo4j is deployed in `docker-compose.yml` and health-checked in four places
 (`health.py` readiness probe, `main.py` shutdown, `admin_service.py` and
 `dashboard_service.py` health tiles) — **all four uses are connectivity pings
@@ -331,7 +337,9 @@ already backs anything.
 Single OpenSearch index, `dcip_evidence` (`app/services/opensearch_service
 .py`), gated end-to-end by `OPENSEARCH_ENABLED` (default `false`) — every
 call no-ops gracefully (returns `False`/`[]`, logs) when disabled or
-unreachable. Mapping: `evidence_id`/`case_id`/`mime_type`/`status` (keyword),
+unreachable. Like Neo4j, OpenSearch is excluded from the default `core`
+Compose profile and is not a startup dependency of `api`/`worker` in any
+profile — see §7's note on the `core`/`full` profile split. Mapping: `evidence_id`/`case_id`/`mime_type`/`status` (keyword),
 `filename`/`text_content`/`entities` (text, standard analyzer), `keywords`
 (keyword), `created_at` (date). `search()` is a `multi_match` across
 `filename^2, text_content, entities, keywords` with highlighting — lexical

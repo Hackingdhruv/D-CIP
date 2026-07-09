@@ -17,6 +17,7 @@ COPY apps/api/pyproject.toml ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev --no-install-project
 COPY apps/api/app ./app
+COPY apps/api/README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev
 
@@ -27,11 +28,21 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
+# Tesseract is required for OCR (app/services/ocr.py) — evidence processing
+# runs here in the worker, not in the api container.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd --create-home --uid 10002 dcip
 
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /app/app /app/app
+
+# The evidence-uploads volume mounts here at runtime — must be writable by
+# the non-root app user, not just present in the image layer.
+RUN mkdir -p /app/uploads && chown -R dcip:dcip /app/uploads
 
 USER dcip
 

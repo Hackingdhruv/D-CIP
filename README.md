@@ -192,16 +192,27 @@ The API refuses to start in production (`DCIP_ENV=production`) with the placehol
 ### Docker Setup
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml --profile dev up --build
+# Core mode (recommended) — PostgreSQL, Redis, API, worker, web.
+# Neo4j and OpenSearch are optional and NOT started — the app degrades
+# gracefully without them (see ARCHITECTURE.md §7-8).
+docker compose -f infrastructure/docker/docker-compose.yml --profile core up --build
+
+# Full mode — the above plus Neo4j and OpenSearch, for the graph/search paths.
+docker compose -f infrastructure/docker/docker-compose.yml --profile full up --build
 ```
 
-This starts PostgreSQL, Redis, Neo4j, OpenSearch, the API, the Celery worker, and the web app. Add the `prod` profile instead to include the NGINX edge proxy.
+Add the `prod` profile instead of `full` to also include the NGINX edge proxy.
 
 ### Run the Application
 
+Database migrations run automatically — the API container's entrypoint applies
+them (`alembic upgrade head`, seeding RBAC roles/permissions and the default
+admin account) every time it starts. No manual step is needed.
+
+Optionally seed one fictional demo case (tasks, notes, timeline, evidence
+with real OCR) — safe to run more than once, refuses to run in production:
 ```bash
-# Apply database migrations (also seeds RBAC roles/permissions + the default admin)
-docker compose exec api uv run alembic upgrade head
+docker compose -f infrastructure/docker/docker-compose.yml exec api python scripts/seed_demo_data.py
 ```
 
 | Service | URL |
@@ -209,6 +220,8 @@ docker compose exec api uv run alembic upgrade head
 | Frontend | http://localhost:5173 |
 | API | http://localhost:8000 |
 | API Docs (non-production only) | http://localhost:8000/docs |
+
+See [`DEMO_GUIDE.md`](DEMO_GUIDE.md) for a full evaluator walkthrough, RAM guidance, and troubleshooting.
 
 <details>
 <summary><strong>Run without Docker</strong></summary>

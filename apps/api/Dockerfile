@@ -19,6 +19,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY app ./app
 COPY alembic.ini ./
 COPY alembic ./alembic
+COPY scripts ./scripts
+COPY README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev
 
@@ -38,6 +40,10 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /app /app
+
+# The evidence-uploads volume mounts here at runtime — must be writable by
+# the non-root app user, not just present in the image layer.
+RUN mkdir -p /app/uploads && chown -R dcip:dcip /app/uploads
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
