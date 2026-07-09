@@ -210,17 +210,28 @@ If running the backend outside Docker: `cd apps/api && uv run python scripts/see
 
 ## 17. Suggested 5-Minute Evaluator Demo Flow
 
-> Run the seed command in §16b first for the fullest demo. Without it, the
-> flow below still works — just create a case and upload a file yourself at
-> step 3–4 instead of opening the seeded one.
+The preferred path — each step's exact command is in the section noted:
 
-1. **Login** — http://localhost:5173, sign in with the admin credentials from §12.
-2. **Executive Dashboard** — land here after login; note the role-based dashboard and system metrics.
-3. **Cases** — open the Cases list. If you ran §16b, open **"[DEMO] Operation Golden Ledger — Cross-Border Investment Fraud"**; otherwise click **New Case** and create one.
-4. **Evidence** — open the Evidence tab. If seeded, you'll see two already-processed files — open `victim_chat_screenshot.png` and note its `ocr_text` was extracted from the image, not typed in. Otherwise, upload a small file yourself and watch it move through the pipeline (hash → metadata → extraction → timeline → indexed).
-5. **AI Assistant** *(only if you completed §13)* — open the AI tab, click **Generate** for a case summary, or ask a question in Chat about the case evidence. Every claim should cite the evidence file by name.
-6. **Reports** — generate a report from the case (PDF/DOCX/HTML export).
-7. **Administration** — as admin, briefly show Identity (user list), Roles/Permissions, and Audit Log to demonstrate server-enforced RBAC and the audit trail.
+1. **Clone the repository** (§4–5).
+2. **Configure the environment** — `cp .env.example .env` (§6).
+3. **Start Core Mode** (§7):
+   ```bash
+   docker compose -f infrastructure/docker/docker-compose.yml --profile core up --build
+   ```
+4. **Login** — http://localhost:5173 with the documented demo admin credentials (§12): `admin@dcip.local` / `Admin@dcip.2024!`.
+5. **Seed fictional demo data** (§16b):
+   ```bash
+   docker compose -f infrastructure/docker/docker-compose.yml exec api python scripts/seed_demo_data.py
+   ```
+6. **Open "[DEMO] Operation Golden Ledger — Cross-Border Investment Fraud"** in the Cases list.
+7. **Explore Evidence, Timeline, Tasks, and Notes** — Evidence has two already-processed files (open `victim_chat_screenshot.png` and note its extracted text came from real OCR on the image, not typed in); Timeline shows the 5 seeded events in order; Tasks shows 4 items across pending/in-progress; Notes shows the 2 seeded investigator notes.
+8. **Optionally enable Ollama for AI** (§13–14) — then open the AI tab, generate a case summary, or ask a question in Chat. Every claim should cite the evidence file by name.
+9. **Optionally switch to Full Mode** (§7) if you want to see the Neo4j/OpenSearch-backed paths:
+   ```bash
+   docker compose -f infrastructure/docker/docker-compose.yml --profile full up -d
+   ```
+
+For a broader tour, also check the Executive Dashboard (lands here after login), Reports (generate a PDF/DOCX/HTML export from the case), and Administration (Identity, Roles/Permissions, Audit Log) to see RBAC and the audit trail.
 
 ## 18. Troubleshooting Common Startup Issues
 
