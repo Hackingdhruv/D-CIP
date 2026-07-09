@@ -167,6 +167,7 @@ class AIIntelligenceService(BaseService):
         from app.services.ai_provider import chat as ai_chat
         ai_result = ai_chat(
             case_title=case.title,
+            case_description=case.description,
             messages=history_msgs,
             evidence_context=context,
         )

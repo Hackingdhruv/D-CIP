@@ -478,9 +478,10 @@ function ChatBubble({ msg }: { msg: AiChatMessage }) {
             {msg.evidenceReferences.map((ref) => (
               <span
                 key={ref}
-                className="rounded bg-black/10 px-1 py-0.5 text-xs font-mono"
+                title={ref}
+                className="max-w-[220px] truncate rounded bg-black/10 px-1.5 py-0.5 text-xs font-mono"
               >
-                {ref.slice(0, 8)}
+                Evidence: {ref}
               </span>
             ))}
           </div>

@@ -12,6 +12,7 @@ AI output as optional enrichment without failing the pipeline.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -22,11 +23,80 @@ decisions. Your role is strictly analytical and advisory.
 
 Rules you MUST follow:
 1. Only use information from the provided evidence context. Never fabricate facts.
-2. Always cite which evidence item your statements reference (use "Evidence: <filename>").
-3. If the evidence is insufficient to answer, say "I don't have enough evidence to answer this."
+2. Always cite which evidence item your statements reference, using the exact format
+   "[Evidence: <filename>]" (square brackets). Never invent a citation for a file that
+   was not given to you in the evidence context.
+3. If, after reviewing the evidence, you cannot provide ANY substantive answer, reply
+   only with "I don't have enough evidence to answer this." Never append that sentence
+   after you have already given a substantive, evidence-based answer — the two are
+   contradictory and confuse the investigator.
 4. Never speculate beyond what the evidence shows.
 5. Be precise, factual, and professional.
 6. You are scoped to a single case — never reference other cases.
+7. Never output raw internal identifiers (database IDs, UUIDs, hashes not present in the
+   evidence text, or similar tokens) unless they are genuinely useful to the investigator
+   and clearly labeled (e.g. a file hash the evidence itself reports). Cite evidence by
+   filename only, as instructed in rule 2.
+
+Entity formatting — evidence often contains several distinct identifiers for the same
+person or asset. Keep them distinct and never conflate them:
+- Person names (e.g. "Dr. Erin Solano") are proper names. Use them when referring to a
+  person.
+- Account or login identifiers (e.g. "HELIOS\\e.solano", "DOMAIN\\username", or an email
+  address used as a login) identify a system account, not a person's name. Only use the
+  literal account string when the point is specifically about a login/account event;
+  otherwise refer to the person by name if the evidence links the two.
+- Devices and media (e.g. USB drives, hard disks, phones, hostnames) are objects, not
+  locations — never phrase a device as somewhere a person or event was "at". Say
+  "using device X" or "via device X" instead.
+
+Numeric formatting — when evidence reports a byte count or other large raw number,
+report the exact figure as given, and you may add a human-readable approximation in
+parentheses, e.g. "23,449,600,000 bytes (~23.45 GB)". Only compute totals or
+correlations you can actually derive from the numbers present in the evidence — never
+estimate or invent a figure that is not supported by the evidence.
+
+Response structure — for questions asking for an investigation overview or summary,
+prefer short labeled sections such as: Investigation Summary, Key Indicators, Timeline,
+Affected Assets/Data, Relevant Evidence, Priority Investigation Steps. Omit any section
+that has nothing to say. For narrow, specific questions, just answer directly without
+forcing this structure. Keep the overall response concise.
+
+Temporal precision — every dated claim you make about a specific event must use
+the exact date/timestamp that the EVIDENCE shows for that event, never a date
+taken from the case description or other background context. Background context
+(e.g. a resignation date, a hire date, an incident-report date) describes the
+overall situation and is NOT the date any particular evidence event occurred on
+— do not substitute it in. If evidence events span multiple dates, describe them
+as a range ("between <first date> and <last date>") or list each date separately;
+never compress a multi-day pattern into a single background-mentioned date.
+Before writing a specific date next to a claim, check that the date is the one
+actually attached to that claim in the evidence, not a date from elsewhere.
+
+Do not infer unstated relationships between separate facts — this applies to
+dates, employment status, identity, ownership, and causation alike. Two facts
+that come from different sources (background context vs. evidence, or two
+different evidence items) must be reported as what they are: separate facts,
+not merged into a new claim unless the evidence or context explicitly states
+that connection. For example, if background context gives a date for one thing
+(e.g. a resignation) and evidence separately shows activity on other dates, do
+not assert that the most recent evidence date IS the background date, or that
+it "was" the day of the background event, unless something explicitly says so.
+When you want to relate such facts without overstating the connection, use
+hedged, neutral phrasing — e.g. "in the days leading up to her departure" or
+"around the time of the resignation" — rather than asserting a specific inferred
+date or status as fact.
+
+Concretely: a phrase like "her last working day" asserts a specific, singular
+fact (that a specific date was that person's final day of employment). Only use
+phrasing like that if some evidence or the case description literally states
+which date was their last working day. If all you actually know is a
+resignation/departure date from background context plus some evidence activity
+on nearby dates, do NOT call any of those evidence dates "her last working
+day" — say the activity occurred "in the days/weeks leading up to her
+departure" instead. This same caution applies to any other singular-sounding
+inferred fact (e.g. "the day she was fired", "her final login", "the moment
+she decided to leave") that isn't literally established by the evidence.
 """
 
 
@@ -186,10 +256,121 @@ def generate_case_summary(
         return None
 
 
+_FALLBACK_SENTENCE = "I don't have enough evidence to answer this."
+_PAREN_CITATION_RE = re.compile(r"\((?:Evidence|File|Source):\s*([^)]+)\)")
+_BULLET_CITATION_RE = re.compile(r"^(\s*[-*]\s*)(?:File|Source):\s*(.+)$", re.MULTILINE)
+_NESTED_CITATION_RE = re.compile(r"\[Evidence:\s*\[([^\]]+)\]\]")
+_BARE_TOKEN_LINE_RE = re.compile(r"^[0-9a-fA-F]{6,40}$")
+_BYTES_RE = re.compile(r"\b(\d[\d,]{2,})\s+bytes?\b(?!\s*\(~)", re.IGNORECASE)
+_CITATION_RE = re.compile(r"\[Evidence:\s*([^\]]+)\]")
+_UNGROUNDED_LAST_DAY_RE = re.compile(
+    r"\b(?:(?:on|during)\s+)?(?P<subj>her|his|their|its|the|"
+    r"[a-z][\w.]*(?:\s[a-z][\w.]*){0,2}'s)\s+"
+    r"(?:last|final)\s+(?:working day|day of work)\b",
+    re.IGNORECASE,
+)
+_LAST_DAY_GROUNDING_RE = re.compile(
+    r"\b(?:last|final)\s+(?:working day|day of work)\b", re.IGNORECASE
+)
+_DATE_NEAR_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+
+def _last_day_paired_with_a_date(grounding_text: str) -> bool:
+    """True only if the "last/final working day" idiom appears with an actual
+    date near it in the source text — i.e. the source itself pins the idiom to
+    a specific date, not just uses the phrase in the abstract.
+    """
+    for m in _LAST_DAY_GROUNDING_RE.finditer(grounding_text):
+        # Tight window: only counts as "pinned" if the date is in the same
+        # clause (e.g. "on 2099-03-04, her last working day"), not just
+        # somewhere earlier in the same paragraph/sentence.
+        window = grounding_text[max(0, m.start() - 25) : m.end() + 25]
+        if _DATE_NEAR_RE.search(window):
+            return True
+    return False
+
+
+def _guard_unsupported_last_day_claims(content: str, grounding_text: str) -> str:
+    """Neutralize an unfounded "her/his/their last working day" claim into
+    hedged phrasing, unless the source text itself pins that idiom to a
+    specific date. Case descriptions and evidence often use the phrase
+    "last working day" in the abstract without ever stating which calendar
+    date that was — a model that then attaches a concrete date to it (or to a
+    specific evidence event) is inferring a fact nobody actually established.
+    General pattern guard, not tied to any specific case, person, or date.
+    """
+    if _last_day_paired_with_a_date(grounding_text):
+        return content  # the source itself ties the idiom to a real date — trust it
+
+    def _sub(m: re.Match[str]) -> str:
+        subj = m.group("subj")
+        if subj.lower() in ("her", "his", "their", "its"):
+            return f"in the days leading up to {subj.lower()} departure"
+        if subj.lower() == "the":
+            return "in the days leading up to the departure"
+        return f"in the days leading up to {subj} departure"  # "<Name>'s" possessive form
+
+    return _UNGROUNDED_LAST_DAY_RE.sub(_sub, content)
+
+
+def _humanize_bytes(n: int) -> str:
+    if n >= 1_000_000_000:
+        return f"{n / 1_000_000_000:.2f} GB"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.2f} MB"
+    return f"{n / 1_000:.2f} KB"
+
+
+def _annotate_byte_counts(text: str) -> str:
+    def _sub(m: re.Match[str]) -> str:
+        n = int(m.group(1).replace(",", ""))
+        if n < 1_000:
+            return m.group(0)
+        return f"{n:,} bytes (~{_humanize_bytes(n)})"
+
+    return _BYTES_RE.sub(_sub, text)
+
+
+def _clean_ai_response(content: str) -> str:
+    """General, case-agnostic cleanup applied to every chat reply.
+
+    - Normalizes "(Evidence: x)" / "(File: x)" / "(Source: x)" citations to the
+      preferred "[Evidence: x]" form, and collapses an accidental
+      "[Evidence: [x]]" double-bracket.
+    - Normalizes bulleted "- File: x" / "- Source: x" lines to "- [Evidence: x]"
+      for the same reason.
+    - Appends a human-readable size next to raw byte counts (pure arithmetic on a
+      number the model already produced — never invents a figure).
+    - Drops a trailing "insufficient evidence" sentence if the model already gave
+      a substantive answer beforehand — the two are contradictory.
+    - Drops trailing lines that consist of nothing but a bare hex/id-looking
+      token, since an unlabeled raw identifier provides no investigative value.
+    """
+    text = _PAREN_CITATION_RE.sub(r"[Evidence: \1]", content)
+    text = _BULLET_CITATION_RE.sub(r"\1[Evidence: \2]", text)
+    text = _NESTED_CITATION_RE.sub(r"[Evidence: \1]", text).strip()
+    text = _annotate_byte_counts(text)
+
+    lines = text.splitlines()
+    while lines and _BARE_TOKEN_LINE_RE.match(lines[-1].strip()):
+        lines.pop()
+    text = "\n".join(lines).rstrip()
+
+    if text.lower().endswith(_FALLBACK_SENTENCE.lower()):
+        before = text[: -len(_FALLBACK_SENTENCE)].rstrip()
+        # Only strip the fallback if there's a substantive answer before it —
+        # if it's the entire response, leave it as the genuine "no answer" case.
+        if len(before) > 80:
+            text = before
+
+    return text or content
+
+
 def chat(
     case_title: str,
     messages: list[dict],
     evidence_context: list[dict],
+    case_description: str | None = None,
 ) -> AIChatResult | None:
     """Answer a question using only the provided evidence context."""
     client, model = _get_client()
@@ -198,19 +379,23 @@ def chat(
 
     from app.core.config import settings
     ev_text = "\n\n---\n\n".join(
-        f"Evidence ID: {e['id']}\nFile: {e['filename']}\n"
+        f"File: {e['filename']}\n"
         f"Summary: {e.get('summary', 'No summary')}\n"
         f"Excerpt:\n{str(e.get('text', ''))[:1500]}"
         for e in evidence_context[:10]
     )
+    case_desc_block = (
+        f"=== Case Description (investigator-provided background — not a citable "
+        f"evidence file) ===\n{case_description}\n\n"
+        if case_description
+        else ""
+    )
     system_with_context = (
         f"{_SYSTEM_PROMPT}\n\n"
         f"=== Case: {case_title} ===\n\n"
+        f"{case_desc_block}"
         f"=== Available Evidence ===\n{ev_text or 'No processed evidence available yet.'}"
     )
-
-    # Track which evidence IDs are referenced
-    referenced: list[str] = [e["id"] for e in evidence_context if e.get("id")]
 
     try:
         response = client.chat.completions.create(
@@ -220,6 +405,18 @@ def chat(
             temperature=settings.ai_temperature,
         )
         content = response.choices[0].message.content or "I was unable to generate a response."
+        content = _clean_ai_response(content)
+        content = _guard_unsupported_last_day_claims(
+            content, f"{case_description or ''}\n{ev_text}"
+        )
+
+        # Surface evidence by filename (a human-readable, self-explanatory label),
+        # never by raw internal ID. Prefer files the model actually cited in the
+        # answer; fall back to every file it had access to if it cited none.
+        cited = {m.strip() for m in _CITATION_RE.findall(content)}
+        all_filenames = [e["filename"] for e in evidence_context if e.get("filename")]
+        referenced = [f for f in all_filenames if f in cited] or all_filenames
+
         return AIChatResult(
             content=content,
             evidence_references=referenced,
