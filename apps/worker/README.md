@@ -4,9 +4,11 @@ Celery worker for background processing. It shares the backend codebase: the
 Celery application is defined in `apps/api/app/worker/celery_app.py`, and this
 service simply runs it.
 
-No tasks are registered in the foundation milestone. The broker and result
-backend are Redis, configured via the shared environment variables
-(`CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`).
+The evidence-processing pipeline runs here: hashing, metadata/OCR
+extraction (Tesseract), entity/keyword extraction, timeline reconstruction,
+and optional AI summarization — see `apps/api/app/worker/tasks/evidence.py`. The
+broker and result backend are Redis, configured via the shared environment
+variables (`CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`).
 
 ## Run locally
 
