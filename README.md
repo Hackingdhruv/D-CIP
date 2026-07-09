@@ -385,6 +385,7 @@ npx tsc --noEmit    # type check
 ## Documentation
 
 - **[`ARCHITECTURE.md`](ARCHITECTURE.md)** — complete technical reference: layering, data model, the real evidence-pipeline stage order, the AI subsystem's actual grounding mechanism, and a list of every place the docs and the code have diverged.
+- **[`DEMO_GUIDE.md`](DEMO_GUIDE.md)** — evaluator-facing setup and demo walkthrough, including verified RAM guidance and a 5-minute demo flow.
 - **[`docs/installation.md`](docs/installation.md)** — detailed setup instructions.
 - **[`docs/development.md`](docs/development.md)** — developer workflow, conventions, and tooling.
 
