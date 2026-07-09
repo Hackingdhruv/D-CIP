@@ -45,13 +45,38 @@ class AIIntelligenceService(BaseService):
         if not case:
             raise NotFoundError(f"Case {case_id} not found.")
 
-        # Collect evidence summaries for context
-        ev_summaries = (
-            self.session.query(EvidenceSummary)
-            .join(Evidence, EvidenceSummary.evidence_id == Evidence.id)
-            .filter(Evidence.case_id == case_id, Evidence.deleted_at.is_(None))
+        # Collect evidence for context. Prefer a per-evidence AI summary where
+        # one exists (that pipeline step is optional and often hasn't run);
+        # fall back to the evidence's own extracted text so the case summary
+        # is never generated nearly blind, with only entity counts to go on.
+        evidence_items = (
+            self.session.query(Evidence)
+            .filter(
+                Evidence.case_id == case_id,
+                Evidence.deleted_at.is_(None),
+                Evidence.status == EvidenceStatus.COMPLETED.value,
+            )
+            .order_by(Evidence.created_at.desc())
+            .limit(20)
             .all()
         )
+        summary_by_evidence_id = {
+            s.evidence_id: s.summary_text
+            for s in self.session.query(EvidenceSummary)
+            .filter(EvidenceSummary.evidence_id.in_([e.id for e in evidence_items]))
+            .all()
+        }
+        evidence_summaries = [
+            {
+                "filename": e.original_filename,
+                "summary": (
+                    summary_by_evidence_id.get(e.id)
+                    or (e.ocr_text or "")[:1500]
+                    or "No summary available."
+                ),
+            }
+            for e in evidence_items
+        ]
 
         # Count entities across the case
         entity_row = (
@@ -68,13 +93,8 @@ class AIIntelligenceService(BaseService):
         from app.services.ai_provider import generate_case_summary
         result = generate_case_summary(
             case_title=case.title,
-            evidence_summaries=[
-                {
-                    "filename": s.evidence.original_filename if s.evidence else "unknown",
-                    "summary": s.summary_text,
-                }
-                for s in ev_summaries
-            ],
+            case_description=case.description,
+            evidence_summaries=evidence_summaries,
             entity_counts=entity_counts,
         )
         if not result:

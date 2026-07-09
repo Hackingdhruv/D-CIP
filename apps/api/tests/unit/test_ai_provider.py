@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from app.services.ai_provider import (
     _clean_ai_response,
+    _flatten_finding,
     _guard_unsupported_last_day_claims,
     chat,
 )
@@ -120,6 +121,33 @@ class TestGuardUnsupportedLastDayClaims:
         grounding = "No such phrase here."
         content = "Activity occurred over several days in May."
         assert _guard_unsupported_last_day_claims(content, grounding) == content
+
+
+class TestFlattenFinding:
+    """A small local model can disobey a 'return a list of strings'
+    instruction and nest objects inside the list instead — this must never
+    leak into the UI as raw Python-dict-repr text."""
+
+    def test_plain_string_passes_through_unchanged(self) -> None:
+        assert _flatten_finding("Unusual login activity detected.") == (
+            "Unusual login activity detected."
+        )
+
+    def test_dict_with_description_key_extracts_that_value(self) -> None:
+        item = {"Indicator": "Insider Theft", "Description": "Files were copied to USB."}
+        assert _flatten_finding(item) == "Files were copied to USB."
+
+    def test_dict_without_known_key_joins_values_readably(self) -> None:
+        item = {"Indicator": "Check email logs", "Priority": "High"}
+        result = _flatten_finding(item)
+        assert "{" not in result and "'" not in result
+        assert "Check email logs" in result and "High" in result
+
+    def test_never_renders_python_dict_repr_syntax(self) -> None:
+        item = {"Question": "What was accessed?", "Description": "Review access logs."}
+        result = _flatten_finding(item)
+        assert not result.startswith("{")
+        assert "':" not in result
 
 
 class TestChatEvidenceReferences:

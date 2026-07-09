@@ -178,7 +178,12 @@ def generate_evidence_summary(
         "1. A 2-3 sentence factual summary of what this evidence contains.\n"
         "2. Up to 5 key findings as bullet points. Each finding must reference the evidence file.\n\n"
         "Format your response as JSON:\n"
-        '{"summary": "...", "key_findings": ["...", ...]}'
+        '{"summary": "...", "key_findings": ["...", ...]}\n\n'
+        "Each item in \"key_findings\" MUST be a single plain-text sentence (a string), "
+        "never a nested object or dictionary. Do not invent or mention any person, "
+        "account, username, device, or entity that is not literally present in the "
+        "evidence above — if you have nothing more to add, return fewer findings "
+        "rather than inventing one."
     )
     try:
         response = client.chat.completions.create(
@@ -195,7 +200,7 @@ def generate_evidence_summary(
         data = json.loads(response.choices[0].message.content or "{}")
         return AISummaryResult(
             summary_text=str(data.get("summary", "")),
-            key_findings=[str(f) for f in data.get("key_findings", [])],
+            key_findings=[_flatten_finding(f) for f in data.get("key_findings", [])],
             model_used=model or "",
         )
     except Exception as exc:
@@ -207,6 +212,7 @@ def generate_case_summary(
     case_title: str,
     evidence_summaries: list[dict],
     entity_counts: dict,
+    case_description: str | None = None,
 ) -> AICaseSummaryResult | None:
     """Generate an AI summary for the entire case based on evidence summaries."""
     client, model = _get_client()
@@ -218,8 +224,14 @@ def generate_case_summary(
         f"Evidence: {s['filename']}\nSummary: {s['summary']}"
         for s in evidence_summaries[:20]  # cap to 20 items
     )
+    case_desc_block = (
+        f"Case Description (investigator-provided background): {case_description}\n\n"
+        if case_description
+        else ""
+    )
     context = (
         f"Case: {case_title}\n\n"
+        f"{case_desc_block}"
         f"Entity counts: {_format_entities(entity_counts)}\n\n"
         f"Evidence summaries:\n{ev_text}"
     )
@@ -228,7 +240,12 @@ def generate_case_summary(
         "Format as JSON:\n"
         '{"summary": "...", "key_findings": ["..."], '
         '"potential_leads": ["..."], "missing_information": ["..."], '
-        '"open_questions": ["..."]}'
+        '"open_questions": ["..."]}\n\n'
+        "Every item in every array MUST be a single plain-text sentence (a string), "
+        "never a nested object or dictionary. Do not invent or mention any person, "
+        "account, username, device, or entity that is not literally present in the "
+        "evidence summaries above — if a field has nothing grounded to say, return "
+        "an empty array for it rather than inventing content to fill it."
     )
     try:
         response = client.chat.completions.create(
@@ -245,10 +262,10 @@ def generate_case_summary(
         data = json.loads(response.choices[0].message.content or "{}")
         return AICaseSummaryResult(
             summary_text=str(data.get("summary", "")),
-            key_findings=[str(f) for f in data.get("key_findings", [])],
-            potential_leads=[str(f) for f in data.get("potential_leads", [])],
-            missing_information=[str(f) for f in data.get("missing_information", [])],
-            open_questions=[str(f) for f in data.get("open_questions", [])],
+            key_findings=[_flatten_finding(f) for f in data.get("key_findings", [])],
+            potential_leads=[_flatten_finding(f) for f in data.get("potential_leads", [])],
+            missing_information=[_flatten_finding(f) for f in data.get("missing_information", [])],
+            open_questions=[_flatten_finding(f) for f in data.get("open_questions", [])],
             model_used=model or "",
         )
     except Exception as exc:
@@ -565,3 +582,37 @@ def generate_embeddings(text: str) -> list[float] | None:
 
 def _format_entities(counts: dict) -> str:
     return ", ".join(f"{k}: {v}" for k, v in counts.items() if v)
+
+
+_PREFERRED_FLATTEN_KEYS = (
+    "description",
+    "finding",
+    "lead",
+    "text",
+    "summary",
+    "detail",
+    "information",
+    "question",
+)
+
+
+def _flatten_finding(item: object) -> str:
+    """Coerce a JSON list item into a single plain-text sentence.
+
+    Small local models sometimes disobey a "return a list of strings"
+    instruction and return a list of nested objects instead (e.g.
+    ``{"Indicator": "X", "Description": "Y"}``). A blind ``str(item)`` would
+    render that as literal Python-dict syntax in the UI. Instead, prefer a
+    descriptive field if one exists; otherwise join every value into a
+    readable sentence fragment.
+    """
+    if isinstance(item, str):
+        return item.strip()
+    if isinstance(item, dict):
+        for key in _PREFERRED_FLATTEN_KEYS:
+            for actual_key, value in item.items():
+                if actual_key.lower() == key and isinstance(value, str) and value.strip():
+                    return value.strip()
+        parts = [str(v).strip() for v in item.values() if str(v).strip()]
+        return ": ".join(parts) if parts else str(item)
+    return str(item)
